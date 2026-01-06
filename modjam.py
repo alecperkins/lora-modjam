@@ -162,10 +162,10 @@ def log (**parts):
     if not logfile:
         raise Exception('No logfile')
     ts = time()
-    msg = '\t'.join(map(lambda x: str(x), parts))
+    msg = '\t'.join(map(lambda x: str(x), parts.values()))
     line = f'{ts}\t{msg}\n';
     print(line)
-    logfile.write(json.dumps({**parts, 'ts': ts}))
+    logfile.write(json.dumps({**parts, 'ts': ts}) + '\n')
 
 
 def configureRadio (conf: RadioConfig):
@@ -307,9 +307,11 @@ async def runCues (cuesheet: Cuesheet, run_config: RunConfig):
         scenario_prefix = f'{scenario['freq']},{scenario['bw']},{scenario['sf']},{scenario['cr']},{scenario['pow']}'
         configureRadio(scenario)
         reconnectRadio()
+        print('waiting for start')
         while t < scenario['start']:
             t = time() - start
             sleep(0.1)
+        print('starting scenario')
 
         while t < scenario['end']:
             t = time() - start
@@ -321,6 +323,7 @@ async def runCues (cuesheet: Cuesheet, run_config: RunConfig):
                 # Wait until the next scenario and just listen
                 wait_for_s = max(scenario['end'] - t,0.5)
                 await asyncio.sleep(wait_for_s)
+        print('scenario complete')
 
 
 def sleepUntilStart (config):
@@ -334,16 +337,15 @@ def sleepUntilStart (config):
 
 def main ():
     config, run_config = prepareConfig()
+    global interface
+    interface = SerialInterface(run_config['port'], noNodes=True) # Confirm radio is connectable
     cuesheet = buildCueSheet(config) # Do this before sleeping so the timing is displayed
+
 
     sleepUntilStart(config)
 
     pub.subscribe(onStatus, 'meshtastic.log')
     pub.subscribe(onReceiveText, 'meshtastic.receive.text')
-
-    global interface
-    interface = SerialInterface(run_config['port'], noNodes=True)
-
     global logfile
     station = run_config['this_station']
     logfile = open('./' + station + '-' + str(time()) + '.jsonl', 'a')
